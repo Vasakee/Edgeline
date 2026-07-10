@@ -74,9 +74,15 @@ const FREE_DURATION_WEEKS = 4;
 // Helpers
 // ---------------------------------------------------------------------------
 
-function loadKeypair(walletPath: string): Keypair {
-  const resolved = path.resolve(walletPath.replace('~', process.env.HOME ?? '~'));
-  const raw: number[] = JSON.parse(fs.readFileSync(resolved, 'utf-8')) as number[];
+function loadKeypair(walletPathOrJson: string): Keypair {
+  let raw: number[];
+  const trimmed = walletPathOrJson.trim();
+  if (trimmed.startsWith('[')) {
+    raw = JSON.parse(trimmed) as number[];
+  } else {
+    const resolved = path.resolve(trimmed.replace('~', process.env.HOME ?? '~'));
+    raw = JSON.parse(fs.readFileSync(resolved, 'utf-8')) as number[];
+  }
   return Keypair.fromSecretKey(Uint8Array.from(raw));
 }
 

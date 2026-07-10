@@ -19,26 +19,36 @@ export class WalletProvider implements OnModuleInit {
   constructor(private readonly config: ConfigService) {}
 
   onModuleInit(): void {
-    const walletPath = this.config.getOrThrow<string>('SOLANA_WALLET_PATH');
-    const resolved = path.resolve(walletPath);
-
-    if (!fs.existsSync(resolved)) {
-      throw new Error(
-        `Wallet file not found at ${resolved}. ` +
-          `Set SOLANA_WALLET_PATH to a valid solana-keygen JSON keypair.`,
-      );
-    }
+    const walletPathOrJson = this.config.getOrThrow<string>('SOLANA_WALLET_PATH').trim();
 
     let raw: unknown;
-    try {
-      raw = JSON.parse(fs.readFileSync(resolved, 'utf-8'));
-    } catch (err) {
-      throw new Error(`Failed to parse wallet file at ${resolved}: ${String(err)}`);
+    if (walletPathOrJson.startsWith('[')) {
+      try {
+        raw = JSON.parse(walletPathOrJson);
+      } catch (err) {
+        throw new Error(
+          `Failed to parse inline SOLANA_WALLET_PATH as JSON array: ${String(err)}`,
+        );
+      }
+    } else {
+      const resolved = path.resolve(walletPathOrJson);
+      if (!fs.existsSync(resolved)) {
+        throw new Error(
+          `Wallet file not found at ${resolved}. ` +
+            `Set SOLANA_WALLET_PATH to a valid file path or to a valid JSON keypair array.`,
+        );
+      }
+
+      try {
+        raw = JSON.parse(fs.readFileSync(resolved, 'utf-8'));
+      } catch (err) {
+        throw new Error(`Failed to parse wallet file at ${resolved}: ${String(err)}`);
+      }
     }
 
     if (!Array.isArray(raw) || raw.length !== 64) {
       throw new Error(
-        `Wallet file at ${resolved} must be a JSON array of exactly 64 bytes. ` +
+        `Wallet must be a JSON array of exactly 64 bytes. ` +
           `Got ${Array.isArray(raw) ? raw.length : typeof raw} element(s).`,
       );
     }
