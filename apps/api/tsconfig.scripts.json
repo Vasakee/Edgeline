@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "outDir": "./dist-scripts"
+  },
+  "include": ["src", "scripts"],
+  "exclude": ["node_modules", "dist"]
+}

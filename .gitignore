@@ -1,0 +1,20 @@
+# Node
+node_modules/
+dist/
+.next/
+.turbo/
+*.tsbuildinfo
+
+# Rust / Anchor
+target/
+.anchor/
+test-ledger/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Misc
+.DS_Store
+*.log

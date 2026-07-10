@@ -1,0 +1,377 @@
+{
+  "address": "EAVB3QfGZmMhRvYmtTrsLLuaRYbe6yBRM6JMj68R4VS3",
+  "metadata": {
+    "name": "edgeline_vault",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Edgeline vault program"
+  },
+  "instructions": [
+    {
+      "name": "record_position",
+      "docs": [
+        "record_position",
+        "",
+        "Creates a new PDA account logging an agent position on-chain.",
+        "The PDA is seeded by [\"position_v2\", fixture_id, counter_bytes] so each",
+        "fixture can have multiple sequential positions recorded.",
+        "",
+        "Arguments:",
+        "fixture_id  — TxLINE fixture ID string",
+        "outcome     — \"home\" | \"draw\" | \"away\"",
+        "size        — notional size in lamports (devnet SOL × 1_000_000_000)",
+        "model_prob  — fair-price model probability × 1_000_000 (e.g. 0.530 → 530_000)",
+        "market_prob — market implied probability × 1_000_000",
+        "counter     — sequential position counter for this fixture (0-indexed)"
+      ],
+      "discriminator": [
+        121,
+        236,
+        13,
+        250,
+        155,
+        214,
+        140,
+        173
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "position_record",
+          "docs": [
+            "The PDA is derived from [\"position_v2\", fixture_id, counter_bytes].",
+            "This allows multiple positions per fixture while keeping them unique."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "fixture_id"
+              },
+              {
+                "kind": "arg",
+                "path": "counter"
+              }
+            ]
+          }
+        },
+        {
+          "name": "fixture_counter",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  101,
+                  114,
+                  95,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "fixture_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "fixture_id",
+          "type": "string"
+        },
+        {
+          "name": "outcome",
+          "type": "string"
+        },
+        {
+          "name": "size",
+          "type": "u64"
+        },
+        {
+          "name": "model_prob",
+          "type": "u64"
+        },
+        {
+          "name": "market_prob",
+          "type": "u64"
+        },
+        {
+          "name": "counter",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "settle_position",
+      "docs": [
+        "settle_position",
+        "",
+        "Updates an existing PositionRecord with the final settlement result.",
+        "Only the original authority can settle their own position.",
+        "",
+        "Arguments:",
+        "outcome_correct — whether the agent's predicted outcome was correct",
+        "pnl             — realised profit/loss in lamports (signed; negative = loss)"
+      ],
+      "discriminator": [
+        33,
+        156,
+        74,
+        218,
+        215,
+        42,
+        112,
+        175
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Only the original authority can settle"
+          ],
+          "signer": true
+        },
+        {
+          "name": "position_record",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "outcome_correct",
+          "type": "bool"
+        },
+        {
+          "name": "pnl",
+          "type": "i64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "FixtureCounter",
+      "discriminator": [
+        73,
+        146,
+        39,
+        211,
+        37,
+        17,
+        137,
+        62
+      ]
+    },
+    {
+      "name": "PositionRecord",
+      "discriminator": [
+        108,
+        204,
+        45,
+        207,
+        168,
+        255,
+        213,
+        158
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "FixtureIdTooLong",
+      "msg": "fixture_id exceeds maximum length"
+    },
+    {
+      "code": 6001,
+      "name": "OutcomeTooLong",
+      "msg": "outcome exceeds maximum length"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidOutcome",
+      "msg": "outcome must be 'home', 'draw', or 'away'"
+    },
+    {
+      "code": 6003,
+      "name": "InvalidProbability",
+      "msg": "probability must be <= 1_000_000"
+    },
+    {
+      "code": 6004,
+      "name": "AlreadySettled",
+      "msg": "position is already settled"
+    },
+    {
+      "code": 6005,
+      "name": "Unauthorized",
+      "msg": "only the original authority may settle this position"
+    },
+    {
+      "code": 6006,
+      "name": "InvalidCounter",
+      "msg": "passed counter does not match expected on-chain counter"
+    }
+  ],
+  "types": [
+    {
+      "name": "FixtureCounter",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "count",
+            "docs": [
+              "Sequential counter tracking positions created for a fixture"
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PositionRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "docs": [
+              "The wallet that recorded this position"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "fixture_id",
+            "docs": [
+              "TxLINE fixture ID string"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "outcome",
+            "docs": [
+              "\"home\" | \"draw\" | \"away\""
+            ],
+            "type": "string"
+          },
+          {
+            "name": "size",
+            "docs": [
+              "Notional size in lamports"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "model_prob",
+            "docs": [
+              "Fair-price probability × 1_000_000"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "market_prob",
+            "docs": [
+              "Market implied probability × 1_000_000"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "counter",
+            "docs": [
+              "Sequential counter used in PDA seed"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "status",
+            "docs": [
+              "Pending | Settled"
+            ],
+            "type": {
+              "defined": {
+                "name": "PositionStatus"
+              }
+            }
+          },
+          {
+            "name": "pnl",
+            "docs": [
+              "Realised PnL in lamports (0 until settled)"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "recorded_at",
+            "docs": [
+              "Unix timestamp when recorded"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "settled_at",
+            "docs": [
+              "Unix timestamp when settled (0 if pending)"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PositionStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Pending"
+          },
+          {
+            "name": "Settled"
+          }
+        ]
+      }
+    }
+  ]
+}
