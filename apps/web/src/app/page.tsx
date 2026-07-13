@@ -310,6 +310,8 @@ export default function Dashboard() {
                                 </div>
                               );
                             })()
+                          ) : pos.status === "skipped" ? (
+                            <span className="text-slate-500 text-xs">—</span>
                           ) : (
                             <span className="text-slate-500 text-xs italic">Awaiting Signature...</span>
                           )}
