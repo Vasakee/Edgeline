@@ -43,6 +43,7 @@ function makeOpportunity(
     outcome: 'home',
     divergencePct: 0.15,          // 15pp divergence
     confidence: 'high',
+    marketProb: 0.5,
     ...overrides,
   };
 }

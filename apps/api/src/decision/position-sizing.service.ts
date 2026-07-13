@@ -138,6 +138,13 @@ export class PositionSizingService {
       this.config.get<string>('MAX_CONCURRENT_POSITIONS_PER_FIXTURE') ?? '1',
       10,
     );
+    this.logger.log(
+      `[startup] Sizing Config Loaded: ` +
+        `MAX_POSITION_SIZE=${this.maxPositionSize}, ` +
+        `MAX_DAILY_EXPOSURE=${this.maxDailyExposure}, ` +
+        `MAX_CONCURRENT_POSITIONS_PER_FIXTURE=${this.maxConcurrentPerFixture}, ` +
+        `CONFIDENCE_MULTIPLIERS=${JSON.stringify(CONFIDENCE_MULTIPLIERS)}`,
+    );
   }
 
   /**
@@ -177,6 +184,39 @@ export class PositionSizingService {
     // ── Step 3: Per-fixture cap ───────────────────────────────────────────────
     const fixtureCapped = openPositionsForFixture >= this.maxConcurrentPerFixture;
 
+    // ── Step 4: Daily exposure cap ────────────────────────────────────────────
+    const exposureAfterThis = currentDailyExposure + sizedBeforeCaps;
+    const exposureCapped = exposureAfterThis > this.maxDailyExposure;
+
+    let skipReason: SkipReason = null;
+    if (fixtureCapped) {
+      skipReason = 'fixture_cap_exceeded';
+    } else if (exposureCapped) {
+      skipReason = 'daily_exposure_cap_exceeded';
+    }
+
+    // ── Step 5: Full reasoning log ────────────────────────────────────────────
+    this.logger.log(
+      `[sizing-reasoning] Deciding on opportunity=${opportunity.opportunityId}: ` +
+        `divergencePct=${opportunity.divergencePct} (${(opportunity.divergencePct * 100).toFixed(2)}%), ` +
+        `confidenceTier=${opportunity.confidence}, ` +
+        `confidenceMultiplierApplied=${multiplier}, ` +
+        `rawCalculatedSizeBeforeCaps=${sizedBeforeCaps}, ` +
+        `MAX_POSITION_SIZE=${this.maxPositionSize}, ` +
+        `openPositionsForFixture=${openPositionsForFixture} (cap=${this.maxConcurrentPerFixture}), ` +
+        `currentDailyExposure=${currentDailyExposure} (cap=${this.maxDailyExposure}), ` +
+        `fixtureCapped=${fixtureCapped}, ` +
+        `exposureCapped=${exposureCapped}, ` +
+        `evalChecks={` +
+          `confidenceTooLow: ${opportunity.confidence === 'low' ? 'yes (applied 0.3x multiplier)' : 'no'}, ` +
+          `sizeCalculatedAs0: ${sizedBeforeCaps === 0 ? 'yes' : 'no'}, ` +
+          `perFixtureCapExceeded: ${fixtureCapped ? 'yes' : 'no'}, ` +
+          `dailyExposureCapExceeded: ${exposureCapped ? 'yes' : 'no'}, ` +
+          `walletBalanceCheckFailed: deferred to execution` +
+        `}, ` +
+        `finalDecision=${skipReason ? `SKIP (${skipReason})` : `EXECUTE (size=${sizedBeforeCaps})`}`
+    );
+
     if (fixtureCapped) {
       const reasoning = this.buildReasoning(
         opportunity,
@@ -194,10 +234,6 @@ export class PositionSizingService {
       );
       return { size: 0, skipReason: 'fixture_cap_exceeded', reasoning };
     }
-
-    // ── Step 4: Daily exposure cap ────────────────────────────────────────────
-    const exposureAfterThis = currentDailyExposure + sizedBeforeCaps;
-    const exposureCapped = exposureAfterThis > this.maxDailyExposure;
 
     if (exposureCapped) {
       const reasoning = this.buildReasoning(
@@ -218,7 +254,6 @@ export class PositionSizingService {
       return { size: 0, skipReason: 'daily_exposure_cap_exceeded', reasoning };
     }
 
-    // ── Step 5: Approved ──────────────────────────────────────────────────────
     const reasoning = this.buildReasoning(
       opportunity,
       baseSize,

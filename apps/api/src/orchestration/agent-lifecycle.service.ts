@@ -1,5 +1,7 @@
 import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
 import { SchedulerRegistry } from '@nestjs/schedule';
+import { ConfigService } from '@nestjs/config';
+import { Connection, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { TxlineAuthService } from '../txline-auth/txline-auth.service';
 import { TxlineDataService, FixtureInfo } from '../txline-data/txline-data.service';
 import { WalletProvider } from '../txline-auth/wallet.provider';
@@ -19,6 +21,7 @@ export class AgentLifecycleService implements OnApplicationBootstrap, OnApplicat
     private readonly dataService: TxlineDataService,
     private readonly walletProvider: WalletProvider,
     private readonly schedulerRegistry: SchedulerRegistry,
+    private readonly config: ConfigService,
   ) {}
 
   getUptime(): number {
@@ -80,13 +83,31 @@ export class AgentLifecycleService implements OnApplicationBootstrap, OnApplicat
       this.logger.error(`[bootstrap] ✗ Fixture fetch FAILED: ${this.lastError}`);
     }
 
-    // ── 3. Polling is auto-started by TxlineDataScheduler.onModuleInit ──────
+    // ── 3. Solana Wallet Balance Check ──────────────────────────────────────
+    let walletBalanceMsg = 'Unknown (failed to check)';
+    try {
+      this.logger.log('[bootstrap] Checking Solana wallet balance…');
+      const rpcUrl = this.config.get<string>('SOLANA_RPC_URL') ?? 'https://api.devnet.solana.com';
+      const connection = new Connection(rpcUrl, 'confirmed');
+      const pubkey = this.walletProvider.getKeypair().publicKey;
+      const balanceLamports = await connection.getBalance(pubkey);
+      const balanceSol = balanceLamports / LAMPORTS_PER_SOL;
+      walletBalanceMsg = `${balanceSol.toFixed(4)} SOL`;
+      this.logger.log(
+        `[bootstrap] ✓ Solana wallet balance checked: ${walletBalanceMsg} for pubkey=${pubkey.toBase58()}`,
+      );
+    } catch (err) {
+      this.logger.error(`[bootstrap] ✗ Solana wallet balance check FAILED: ${String(err)}`);
+    }
+
+    // ── 4. Polling is auto-started by TxlineDataScheduler.onModuleInit ──────
     this.logger.log('[bootstrap] Step 3/3 — Polling scheduler is active');
 
     // ── Banner ──────────────────────────────────────────────────────────────
     this.logger.log('═══════════════════════════════════════════════════════');
     this.logger.log(`  AGENT IS LIVE AND AUTONOMOUS`);
     this.logger.log(`  Wallet:   ${this.walletProvider.getPublicKeyBase58()}`);
+    this.logger.log(`  Balance:  ${walletBalanceMsg}`);
     this.logger.log(`  Auth:     ${this.authStatus}`);
     this.logger.log(`  Fixtures: ${this.activeFixtures.length} monitored`);
     this.logger.log(`  Time:     ${new Date().toISOString()}`);
