@@ -47,6 +47,24 @@ export default function Dashboard() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
   const [expandedErrors, setExpandedErrors] = useState<Record<string, boolean>>({});
+  const [positionFilter, setPositionFilter] = useState<"all" | "settled" | "executed" | "skipped">("all");
+
+  // Priority order: settled first, then executed, then others, skipped last
+  const STATUS_PRIORITY: Record<string, number> = { settled: 0, executed: 1, pending: 2, failed: 3, skipped: 4 };
+  const sortedPositions = [...positions].sort((a, b) => {
+    const pa = STATUS_PRIORITY[a.status] ?? 2;
+    const pb = STATUS_PRIORITY[b.status] ?? 2;
+    if (pa !== pb) return pa - pb;
+    return new Date(b.decidedAt).getTime() - new Date(a.decidedAt).getTime();
+  });
+  const filteredPositions = positionFilter === "all"
+    ? sortedPositions
+    : sortedPositions.filter((p) => p.status === positionFilter);
+
+  const positionCounts = positions.reduce<Record<string, number>>((acc, p) => {
+    acc[p.status] = (acc[p.status] || 0) + 1;
+    return acc;
+  }, {});
 
   // Fetch initial opportunities and positions on mount
   useEffect(() => {
@@ -242,9 +260,31 @@ export default function Dashboard() {
 
         {/* Positions Panel */}
         <section className="bg-slate-900/40 border border-slate-850 rounded-2xl p-6">
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
             <h2 className="text-lg font-semibold text-slate-200">Active & Settled Positions</h2>
-            <span className="text-xs text-slate-500 font-mono">Real-time status transitions</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              {(["all", "settled", "executed", "skipped"] as const).map((f) => {
+                const count = f === "all" ? positions.length : (positionCounts[f] ?? 0);
+                const active = positionFilter === f;
+                const colorMap: Record<string, string> = {
+                  all: active ? "bg-slate-700 text-slate-100 border-slate-600" : "bg-slate-800/60 text-slate-400 border-slate-700 hover:text-slate-200",
+                  settled: active ? "bg-blue-500/30 text-blue-300 border-blue-500/50" : "bg-slate-800/60 text-slate-400 border-slate-700 hover:text-blue-300",
+                  executed: active ? "bg-emerald-500/30 text-emerald-300 border-emerald-500/50" : "bg-slate-800/60 text-slate-400 border-slate-700 hover:text-emerald-300",
+                  skipped: active ? "bg-gray-500/30 text-gray-300 border-gray-500/50" : "bg-slate-800/60 text-slate-400 border-slate-700 hover:text-gray-300",
+                };
+                return (
+                  <button
+                    key={f}
+                    onClick={() => setPositionFilter(f)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${colorMap[f]}`}
+                  >
+                    <span className="capitalize">{f}</span>
+                    <span className="bg-slate-900/60 px-1.5 py-0.5 rounded-full text-[10px]">{count}</span>
+                  </button>
+                );
+              })}
+              <span className="text-xs text-slate-500 font-mono ml-1">sorted by status</span>
+            </div>
           </div>
 
           <div className="overflow-x-auto">
@@ -260,14 +300,14 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-850/60 text-sm text-slate-300">
-                {positions.length === 0 ? (
+                {filteredPositions.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="py-8 text-center text-slate-500">
-                      No positions created yet.
+                      {positions.length === 0 ? "No positions created yet." : `No ${positionFilter === "all" ? "" : positionFilter + " "}positions found.`}
                     </td>
                   </tr>
                 ) : (
-                  positions.map((pos) => {
+                  filteredPositions.map((pos) => {
                     const txSig = pos.reasoning?.txSignature || pos.txSignature;
                     return (
                       <tr key={pos._id} className="hover:bg-slate-900/20 transition-colors">
